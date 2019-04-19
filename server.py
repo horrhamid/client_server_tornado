@@ -26,7 +26,7 @@ class Application(tornado.web.Application):
              (r"/closeticket/([^/]+)/([^/]+)", closeticket),
              (r"/getticketmod/([^/]+)", getticketmod),
              (r"/restoticketmod/([^/]+)/([^/]+)/([^/]+)", restoticketmod),
-          #   (r"/changestatus/([^/]+)/([^/]+)", changestatus),
+             (r"/changestatus/([^/]+)/([^/]+)/([^/]+)", changestatus),
              (r"/signup/([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+)", signup),
             #post
             (r"/login", login),
@@ -37,7 +37,7 @@ class Application(tornado.web.Application):
             (r"/closeticket", closeticket),
             (r"/getticketmod", getticketmod),
             (r"/restoticketmod", restoticketmod),
-        #    (r"/changestatus", changestatus),
+            (r"/changestatus", changestatus),
             (r".*", defaulthandler),
         ]
         settings = dict()
@@ -82,11 +82,13 @@ class BaseHandler(tornado.web.RequestHandler):
 
 class defaulthandler(BaseHandler):
     def get(self):
-        output = {'status': 'Wrong Command'}
+        output = {'message': 'Wrong Command',
+                  'status':'false'}
         self.write(output)
 
     def post(self):
-        output = {'status': 'Wrong Command'}
+        output = {'message': 'Wrong Command',
+                  'status':'false'}
         self.write(output)
 
 
@@ -103,7 +105,8 @@ class signup(BaseHandler):
                       'status': 'OK'}
             self.write(output)
         else:
-            output = {'status': 'User Exist'}
+            output = {'message': 'User Exist',
+                      'status': 'false'}
             self.write(output)
 
     def post(self, *args, **kwargs):
@@ -119,11 +122,14 @@ class signup(BaseHandler):
                 """INSERT INTO user (username, password,firstname,lastname, token,rule) values (%s,%s,%s,%s,%s,%s) """,
                 username, password, firstname, lastname, api_token, rule)
 
-            output = {'api': api_token,
+            output = {'message': 'signed up Successfully',
+                      'code': '200',
+                      'api': api_token,
                       'status': 'OK'}
             self.write(output)
         else:
-            output = {'status': 'User Exist'}
+            output = {'message': 'User Exist',
+                      'status':'false'}
             self.write(output)
 
 
@@ -140,7 +146,8 @@ class login(BaseHandler):
                       'status': 'OK'}
             self.write(output)
         else:
-            output = {'status': 'User Exist'}
+            output = {'message': 'User Exist',
+                      'status': 'false'}
             self.write(output)
 
     def post(self):
@@ -151,11 +158,14 @@ class login(BaseHandler):
             api_token = str(hexlify(os.urandom(16)))
             user_id = self.db.execute("""update user set token = %s where username= %s""", api_token, username)
 
-            output = {'api': api_token,
+            output = {'message': 'logged in Successfully',
+                      'code': '200',
+                      'api': api_token,
                       'status': 'OK'}
             self.write(output)
         else:
-            output = {'status': 'User Exist'}
+            output = {'message': 'User Exist',
+                      'status': 'false'}
             self.write(output)
 
 
@@ -171,7 +181,8 @@ class logout(BaseHandler):
                       'status': 'OK'}
             self.write(output)
         else:
-            output = {'status': 'Wrong username or password'}
+            output = {'message': 'Wrong username or password',
+                      'status': 'false'}
             self.write(output)
 
     def post(self, *args, **kwargs):
@@ -187,7 +198,8 @@ class logout(BaseHandler):
                       'status': 'OK'}
             self.write(output)
         else:
-            output = {'status': 'Wrong username or password'}
+            output = {'message': 'Wrong username or password',
+                      'status': 'false'}
             self.write(output)
 
 
@@ -203,7 +215,8 @@ class sendticket(BaseHandler):
                       'status': 'OK'}
             self.write(output)
         else:
-            output = {'status': 'Wrong Api'}
+            output = {'message': 'Wrong api',
+                      'status': 'false'}
             self.write(output)
 
     def post(self, *args, **kwargs):
@@ -211,16 +224,18 @@ class sendticket(BaseHandler):
             subject = self.get_argument('subject')
             body = self.get_argument('body')
             t = self.check_api(token)
+            sender = self.return_user(token)
             if t:
-                user_id = self.db.execute("""INSERT INTO tickets (subject, body,situation) values (%s,%s,%s) """,
-                                          subject, body, "open")
+                user_id = self.db.execute("""INSERT INTO tickets (subject, body,situation,sender,reciver) values (%s,%s,%s,%s,%s) """,
+                                          subject, body, "open", sender["username"], sender["username"])
 
                 output = {'message': 'ticket sent Succsessfully',
                           'code': '200',
                           'status': 'OK'}
                 self.write(output)
             else:
-                output = {'status': 'Wrong Api'}
+                output = {'message': 'Wrong api',
+                          'status': 'false'}
                 self.write(output)
 
 
@@ -228,52 +243,72 @@ class getticketcli(BaseHandler):
     def get(self, *args):
         t = self.check_api(args[0])
         user = self.return_user(args[0])
-        print (user["username"])
         if t:
             user_id = self.db.query("SELECT * from tickets where reciver=%s", user["username"])
-            for x in user_id:
-                self.write(x)
-            output = {'message': 'ticket sent Succsessfully',
+            temp_o = {}
+            output = {'message': 'your tickets are ready for show :',
                       'code': '200',
-                      'status': 'OK'}
+                      'status': 'OK',
+                      'blocks': {}
+                      }
+            for x in range(0, len(user_id)):
+                temp_o[x] = {
+                    'subject': user_id[x]["subject"],
+                    'body': user_id[x]["body"],
+                    'status': user_id[x]["situation"],
+                    'id': user_id[x]["id"],
+                }
+                output['blocks'].update(temp_o)
+
             self.write(output)
         else:
-            output = {'status': 'Wrong Api'}
+            output = {'message': 'Wrong api',
+                      'status': 'false'}
             self.write(output)
 
     def post(self):
             token = self.get_argument('token')
             t = self.check_api(token)
             user = self.return_user(token)
-            print (user["username"])
             if t:
                 user_id = self.db.query("""select * from tickets where reciver=%s""", user["username"])
-                for x in user_id :
-                    self.write(x)
-                output = {'message': 'ticket sent Succsessfully',
+                temp_o = {}
+                output = {'message': 'your tickets are ready for show :',
                           'code': '200',
-                          'status': 'OK'}
+                          'status': 'OK',
+                          'blocks': {}
+                          }
+
+                for x in range(0,len(user_id)) :
+                    temp_o[x]={
+                        'subject' : user_id[x]["subject"],
+                        'body': user_id[x]["body"],
+                        'status': user_id[x]["situation"],
+                        'id': user_id[x]["id"],
+                    }
+                    output['blocks'].update(temp_o)
+
                 self.write(output)
             else:
-                output = {'status': 'Wrong Api'}
+                output = {'message': 'Wrong api',
+                          'status': 'false'}
                 self.write(output)
 
 
 class closeticket(BaseHandler):
     def get(self,*args):
-        # token = self.get_argument('token')
-        # id_2 = self.get_argument('id'
         t = self.check_api(args[0])
         user = self.return_user(args[0])
         x = "close"
         if t:
             user_id = self.db.execute("""update tickets set situation =%s where id=%s """,x,args[1])
-            output = {'message': 'ticket sent Succsessfully',
+            output = {'message': 'ticket closed Succsessfully',
                       'code': '200',
                       'status': 'OK'}
             self.write(output)
         else:
-            output = {'status': 'Wrong Api'}
+            output = {'message': 'Wrong api',
+                      'status': 'false'}
             self.write(output)
 
     def post(self):
@@ -282,13 +317,14 @@ class closeticket(BaseHandler):
         t = self.check_api(token)
         sender = self.return_user(token)
         if t:
-            user_id = self.db.execute("""update tickets set subject = %s where id= %s""", "close", id_2[0])
-            output = {'message': 'ticket sent Succsessfully',
+            user_id = self.db.execute("""update tickets set situation = %s where id= %s""", "close", id_2[0])
+            output = {'message': 'ticket closed Succsessfully',
                       'code': '200',
                       'status': 'OK'}
             self.write(output)
         else:
-            output = {'status': 'Wrong Api'}
+            output = {'message': 'Wrong api',
+                      'status': 'false'}
             self.write(output)
 
 
@@ -298,14 +334,24 @@ class getticketmod(BaseHandler):
         y = "admin"
         if user["rule"] == y:
             user_id = self.db.query("SELECT * from tickets ")
-            for x in user_id:
-                self.write(x)
-            output = {'message': 'ticket sent Succsessfully',
+            temp_o = {}
+            output = {'message': 'tickets are ready to show :',
                       'code': '200',
-                      'status': 'OK'}
-            self.write(output)
+                      'status': 'OK',
+                      'blocks': {}
+                      }
+            for x in range(0, len(user_id)):
+                temp_o[x] = {
+                    'subject': user_id[x]["subject"],
+                    'body': user_id[x]["body"],
+                    'status': user_id[x]["situation"],
+                    'id': user_id[x]["id"],
+                }
+                output['blocks'].update(temp_o)
+                self.write(output)
         else:
-            output = {'status': 'Wrong Api'}
+            output = {'message': 'Wrong api',
+                      'status': 'false'}
             self.write(output)
 
     def post(self):
@@ -315,14 +361,24 @@ class getticketmod(BaseHandler):
             y = "admin"
             if user["rule"] == y:
                 user_id = self.db.query("""select * from tickets """)
-                for x in user_id :
-                    self.write(x)
-                output = {'message': 'ticket sent Succsessfully',
+                temp_o = {}
+                output = {'message': 'tickets are ready to show :',
                           'code': '200',
-                          'status': 'OK'}
+                          'status': 'OK',
+                          'blocks': {}
+                          }
+                for x in range(0, len(user_id)):
+                    temp_o[x] = {
+                        'subject': user_id[x]["subject"],
+                        'body': user_id[x]["body"],
+                        'status': user_id[x]["situation"],
+                        'id': user_id[x]["id"],
+                    }
+                    output['blocks'].update(temp_o)
                 self.write(output)
             else:
-                output = {'status': 'Wrong Api'}
+                output = {'message': 'Wrong api',
+                          'status': 'false'}
                 self.write(output)
 
 
@@ -332,15 +388,14 @@ class restoticketmod(BaseHandler):
         y = "admin"
         if user["rule"] == y:
             user_id = self.db.get("""select sender from tickets  where id=%s """, args[1])
-            print (user_id)
-            user_id2= self.db.execute("""insert into tickets (sender,reciver,body,situation) values (%s,%s,%s,%s) ""","admin",user_id,args[2],"open")
-
-            output = {'message': 'ticket sent Succsessfully',
+            user_id2 = self.db.execute("""insert into tickets (sender,reciver,body,situation,subject) values (%s,%s,%s,%s,%s) ""","admin",user_id["sender"],args[2],"open","Answer")
+            output = {'message': 'response sent successully',
                       'code': '200',
                       'status': 'OK'}
             self.write(output)
         else:
-            output = {'status': 'Wrong Api'}
+            output = {'message': 'Wrong api',
+                      'status': 'false'}
             self.write(output)
 
     def post(self, *args, **kwargs):
@@ -352,16 +407,53 @@ class restoticketmod(BaseHandler):
             if t["rule"] == y:
                 user_id = self.db.get("""select sender from tickets  where id=%s """, id_2)
                 user_id2 = self.db.execute(
-                    """insert into tickets (sender,reciver,body,situation) values (%s,%s,%s,%s) """, "admin", user_id,
-                    body, "open")
+                    """insert into tickets (sender,reciver,body,situation,subject) values (%s,%s,%s,%s,%s) """, "admin", user_id["sender"],
+                    body, "open","Answer")
 
-                output = {'message': 'ticket sent Succsessfully',
+                output = {'message': 'response sent Succsessfully',
                           'code': '200',
                           'status': 'OK'}
                 self.write(output)
             else:
-                output = {'status': 'Wrong Api'}
+                output = {'message': 'Wrong api',
+                          'status': 'false'}
                 self.write(output)
+
+
+class changestatus(BaseHandler):
+    def get(self,*args):
+        user = self.return_user(args[0])
+        y = "admin"
+        if user["rule"] == y:
+            user_id = self.db.execute("""update tickets set situation= %s where id = %s""", args[2],args[1])
+
+            output = {'message': 'status changed Successfully',
+                      'code': '200',
+                      'status': 'OK'}
+            self.write(output)
+        else:
+            output = {'message': 'Wrong username or password',
+                      'status': 'false'}
+            self.write(output)
+
+    def post(self, *args, **kwargs):
+        token = self.get_argument('token')
+        id_2 = self.get_argument('id')
+        status = self.get_argument('status')
+        user = self.return_user(token)
+        y = "admin"
+        if user["rule"] == y:
+            user_id = self.db.execute("""update tickets set situation= %s where id = %s""", status, id_2)
+
+            output = {'message': 'status changed Successfully',
+                      'code': '200',
+                      'status': 'OK'}
+            self.write(output)
+        else:
+            output = {'message': 'Wrong username or password',
+                      'status': 'false'}
+
+            self.write(output)
 
 
 
