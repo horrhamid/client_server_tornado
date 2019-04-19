@@ -13,8 +13,19 @@ def __postcr__():
     return "http://"+HOST+":"+PORT+"/"+CMD+"?"
 
 
-def print_data(d):
-    print(d)
+def print_data(data):
+    print ("message : %s",data["message"])
+    print ("status : %s", data["status"])
+    print ("code : %s", data["code"])
+    i = 0
+    for x in data["blocks"]:
+        print ("block  "+ str(i) + ":")
+        print ("subject : "+ str(data["blocks"][str(x)]["subject"]))
+        print ("body : "+ str(data["blocks"][str(x)]["body"]))
+        print ("status : " + str(data["blocks"][str(x)]["status"]))
+        print ("id : " + str(data["blocks"][str(x)]["id"]))
+        print ("")
+        i+=1
 
 def print_message(d):
     print (d["message"])
